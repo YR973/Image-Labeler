@@ -431,7 +431,8 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Dental Mask Labeler (PySide6)")
         self.canvas = LabelCanvas(self)
 
-        self.base_dir = os.getcwd()
+        # Use the program/script directory, not the image directory
+        self.base_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
         self.current_base_name = None
 
         self.init_ui()
@@ -549,8 +550,8 @@ class MainWindow(QMainWindow):
             if base.endswith("_original"):
                 base = base[:-9]
             self.current_base_name = base
-            self.base_dir = os.path.dirname(path)
 
+            # Do not change self.base_dir; keep program path
             self.canvas.load_image(path)
             self.setWindowTitle(f"Dental Mask Labeler – {base}")
 
