@@ -22,15 +22,15 @@ jobs:
       run: |
         pip install --upgrade pip
         pip install -r requirements.txt
-        pip install pyinstaller
         pip install PySide6
+        pip install pyinstaller
 
     - name: Build EXE
       run: |
-        pyinstaller --onefile --windowed --collect-all PySide6 main.py
+        pyinstaller --onefile --windowed --collect-all PySide6 Labeler/main.py --name DentalLabeler
 
-    - name: Upload EXE artifact
+    - name: Upload EXE
       uses: actions/upload-artifact@v4
       with:
         name: DentalLabelerEXE
-        path: dist/main.exe
+        files: dist/DentalLabeler.exe
