@@ -29,8 +29,8 @@ jobs:
       run: |
         pyinstaller --onefile --windowed --collect-all PySide6 Labeler/main.py --name DentalLabeler
 
-    - name: Upload EXE
+    - name: Upload EXE artifact
       uses: actions/upload-artifact@v4
       with:
         name: DentalLabelerEXE
-        files: dist/DentalLabeler.exe
+        path: dist/DentalLabeler.exe
