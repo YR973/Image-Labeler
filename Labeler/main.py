@@ -41,6 +41,17 @@ VALID_IDS = {0, 1, 2, 3, 4, 5}
 # ---------------------- Canvas widget ---------------------- #
 
 class LabelCanvas(QWidget):
+
+    def get_per_class_masks(self):
+        """Return dict of class_id -> binary mask (uint8, 0 or 255) for all classes."""
+        h, w = self.mask.shape
+        out = {}
+        for cid in sorted(CLASS_MAP.keys()):
+            layer = np.zeros((h, w), dtype=np.uint8)
+            layer[self.mask == cid] = 255
+            out[cid] = layer
+        return out
+
     def __init__(self, parent=None):
         super().__init__(parent)
 
@@ -543,6 +554,53 @@ class MainWindow(QMainWindow):
             self.canvas.load_image(path)
             self.setWindowTitle(f"Dental Mask Labeler – {base}")
 
+
+    # def save_all(self):
+    #     if self.canvas.image is None or self.current_base_name is None:
+    #         QMessageBox.warning(self, "Nothing to save", "Load an image first.")
+    #         return
+    #
+    #     base = self.current_base_name
+    #
+    #     images_dir = os.path.join(self.base_dir, "images_512")
+    #     masks_dir = os.path.join(self.base_dir, "masks_512_cleaned")
+    #     json_dir = os.path.join(self.base_dir, "labeled_data")
+    #     os.makedirs(images_dir, exist_ok=True)
+    #     os.makedirs(masks_dir, exist_ok=True)
+    #     os.makedirs(json_dir, exist_ok=True)
+    #
+    #     # 1) original image 512x512
+    #     img_filename = f"{base}_original.png"
+    #     img_path = os.path.join(images_dir, img_filename)
+    #     QPixmap.fromImage(self.canvas.image).save(img_path, "PNG")
+    #
+    #     # 2) true label mask (0–5, uint8, grayscale)
+    #     mask_uint8 = self.canvas.get_mask_uint8()
+    #     mask_img = Image.fromarray(mask_uint8, mode="L")
+    #     mask_filename = f"{base}_mask.png"
+    #     mask_path = os.path.join(masks_dir, mask_filename)
+    #     mask_img.save(mask_path)
+    #
+    #     # 3) colored preview mask (RGB)
+    #     preview_rgb = self.canvas.get_colored_mask()
+    #     preview_img = Image.fromarray(preview_rgb, mode="RGB")
+    #     preview_filename = f"{base}_mask_preview.png"
+    #     preview_path = os.path.join(masks_dir, preview_filename)
+    #     preview_img.save(preview_path)
+    #
+    #     # 4) JSON metadata
+    #     json_data = self.canvas.get_json(img_filename)
+    #     json_filename = f"{base}.json"
+    #     json_path = os.path.join(json_dir, json_filename)
+    #     with open(json_path, "w") as f:
+    #         json.dump(json_data, f, indent=2)
+    #
+    #     QMessageBox.information(
+    #         self,
+    #         "Saved",
+    #         f"Saved:\n{img_path}\n{mask_path}\n{preview_path}\n{json_path}",
+    #     )
+
     def save_all(self):
         if self.canvas.image is None or self.current_base_name is None:
             QMessageBox.warning(self, "Nothing to save", "Load an image first.")
@@ -553,9 +611,11 @@ class MainWindow(QMainWindow):
         images_dir = os.path.join(self.base_dir, "images_512")
         masks_dir = os.path.join(self.base_dir, "masks_512_cleaned")
         json_dir = os.path.join(self.base_dir, "labeled_data")
+        layers_dir = os.path.join(self.base_dir, "layers_512")  # new directory for per-class layers
         os.makedirs(images_dir, exist_ok=True)
         os.makedirs(masks_dir, exist_ok=True)
         os.makedirs(json_dir, exist_ok=True)
+        os.makedirs(layers_dir, exist_ok=True)
 
         # 1) original image 512x512
         img_filename = f"{base}_original.png"
@@ -583,11 +643,21 @@ class MainWindow(QMainWindow):
         with open(json_path, "w") as f:
             json.dump(json_data, f, indent=2)
 
+        # 5) per-class layer images (binary masks), saved even if empty
+        per_class = self.canvas.get_per_class_masks()
+        saved_layer_paths = []
+        for cid, layer in per_class.items():
+            label_name = CLASS_MAP[cid].name.replace(" ", "_")
+            layer_filename = f"{base}_layer_{cid}_{label_name}.png"
+            layer_path = os.path.join(layers_dir, layer_filename)
+            Image.fromarray(layer, mode="L").save(layer_path)
+            saved_layer_paths.append(layer_path)
+
         QMessageBox.information(
             self,
             "Saved",
-            f"Saved:\n{img_path}\n{mask_path}\n{preview_path}\n{json_path}",
-        )
+            f"Saved:\n{img_path}\n{mask_path}\n{preview_path}\n{json_path}\n" + "\n".join(saved_layer_paths),
+            )
 
 
 # ---------------------- Main entry ---------------------- #
