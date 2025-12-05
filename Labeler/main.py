@@ -70,7 +70,7 @@ class LabelCanvas(QWidget):
         self.current_polygon = []       # list[QPointF]
         self.polygons = []              # polygons for JSON
 
-        # undo / redo
+        # undo / redo (for mask)
         self.undo_stack = []
         self.redo_stack = []
         self._operation_active = False
@@ -94,6 +94,7 @@ class LabelCanvas(QWidget):
     # ---------------------- Image loading ---------------------- #
 
     def load_image(self, path: str):
+        """Load base image (and reset mask/polygons)."""
         pil_img = Image.open(path).convert("RGB")
         pil_img = pil_img.resize((512, 512), Image.BILINEAR)
 
@@ -119,6 +120,22 @@ class LabelCanvas(QWidget):
         bytes_per_line = ch * w
         return QImage(arr.data, w, h, bytes_per_line, QImage.Format_RGB888).copy()
 
+    # allow main window to inject an existing mask & polygons
+    def set_mask_and_polygons(self, mask: np.ndarray | None, polygons: list | None):
+        if mask is not None:
+            if mask.shape != (512, 512):
+                # resize if needed, but try to avoid this ideally
+                mask = cv2.resize(mask, (512, 512), interpolation=cv2.INTER_NEAREST)
+            self.mask = mask.astype(np.uint8)
+        else:
+            self.mask = np.zeros((512, 512), dtype=np.uint8)
+
+        self.polygons = polygons if polygons is not None else []
+        self.current_polygon = []
+        self.undo_stack.clear()
+        self.redo_stack.clear()
+        self.update()
+
     # ---------------------- Undo / redo ---------------------- #
 
     def push_undo(self):
@@ -127,6 +144,7 @@ class LabelCanvas(QWidget):
             self.redo_stack.clear()
 
     def undo(self):
+        """Undo for mask; polygon points are handled in MainWindow."""
         if not self.undo_stack:
             return
         self.redo_stack.append(self.mask.copy())
@@ -236,27 +254,42 @@ class LabelCanvas(QWidget):
         if not (0 <= x < 512 and 0 <= y < 512):
             return
 
-        # polygon
-        if self.current_tool == "polygon" and event.button() == Qt.LeftButton:
-            self.current_polygon.append(QPointF(x, y))
-            self.update()
+        # polygon: left click = add point, right click = close polygon
+        if self.current_tool == "polygon":
+            if event.button() == Qt.LeftButton:
+                # add a vertex
+                self.current_polygon.append(QPointF(x, y))
+                self.update()
+            elif event.button() == Qt.RightButton:
+                # close polygon if enough points
+                if len(self.current_polygon) >= 3:
+                    self._operation_active = True
+                    self._mask_before_operation = self.mask.copy()
+                    self.commit_polygon()
+                    self.finish_operation()
+                # clear current polygon whether we committed or not
+                self.current_polygon = []
+                self.update()
+            return
 
         # brush
-        elif self.current_tool == "brush" and event.button() in (Qt.LeftButton, Qt.RightButton):
+        if self.current_tool == "brush" and event.button() in (Qt.LeftButton, Qt.RightButton):
             self._operation_active = True
             self._mask_before_operation = self.mask.copy()
             self.brush_drawing = True
             self.brush_erasing = (event.button() == Qt.RightButton)
             self.apply_brush(x, y)
             self.update()
+            return
 
         # magic wand
-        elif self.current_tool == "wand" and event.button() == Qt.LeftButton:
+        if self.current_tool == "wand" and event.button() == Qt.LeftButton:
             self._operation_active = True
             self._mask_before_operation = self.mask.copy()
             self.apply_wand(int(x), int(y))
             self.finish_operation()
             self.update()
+            return
 
     def mouseMoveEvent(self, event):
         pos = event.position().toPoint()
@@ -285,13 +318,8 @@ class LabelCanvas(QWidget):
             self.finish_operation()
 
     def mouseDoubleClickEvent(self, event):
-        if self.current_tool == "polygon" and len(self.current_polygon) >= 3:
-            self._operation_active = True
-            self._mask_before_operation = self.mask.copy()
-            self.commit_polygon()
-            self.finish_operation()
-            self.current_polygon = []
-            self.update()
+        # no longer used for polygon closing
+        pass
 
     def wheelEvent(self, event):
         if self.image is None:
@@ -435,6 +463,11 @@ class MainWindow(QMainWindow):
         self.base_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
         self.current_base_name = None
 
+        # folder / image list for navigation
+        self.image_folder = None
+        self.image_files = []   # list of filenames in folder
+        self.current_index = -1
+
         self.init_ui()
 
     def init_ui(self):
@@ -446,17 +479,17 @@ class MainWindow(QMainWindow):
         tb = QToolBar()
         self.addToolBar(tb)
 
-        act_open = QAction("Open", self)
-        act_open.triggered.connect(self.open_image)
+        act_open = QAction("Open Folder", self)
+        act_open.triggered.connect(self.open_folder)
         tb.addAction(act_open)
 
         act_save = QAction("Save", self)
-        act_save.triggered.connect(self.save_all)
+        act_save.triggered.connect(lambda: self.save_all(show_message=True))
         tb.addAction(act_save)
 
         act_undo = QAction("Undo", self)
         act_undo.setShortcut("Ctrl+Z")
-        act_undo.triggered.connect(self.canvas.undo)
+        act_undo.triggered.connect(self.handle_undo)
         tb.addAction(act_undo)
 
         act_redo = QAction("Redo", self)
@@ -477,6 +510,18 @@ class MainWindow(QMainWindow):
             btn = QPushButton(name)
             btn.clicked.connect(lambda _, t=tool: self.canvas.set_tool(t))
             tools_row.addWidget(btn)
+
+        # navigation buttons
+        nav_row = QHBoxLayout()
+        layout.addLayout(nav_row)
+
+        btn_prev = QPushButton("Previous")
+        btn_prev.clicked.connect(self.prev_image)
+        nav_row.addWidget(btn_prev)
+
+        btn_next = QPushButton("Next")
+        btn_next.clicked.connect(self.next_image)
+        nav_row.addWidget(btn_next)
 
         # class selector
         class_row = QHBoxLayout()
@@ -529,6 +574,10 @@ class MainWindow(QMainWindow):
             self.canvas.set_tool("wand")
         elif key == Qt.Key_Space:
             self.canvas.set_tool("pan")
+        elif key == Qt.Key_Left:
+            self.prev_image()
+        elif key == Qt.Key_Right:
+            self.next_image()
         elif Qt.Key_0 <= key <= Qt.Key_9:
             cid = key - Qt.Key_0
             if cid in VALID_IDS:
@@ -539,72 +588,117 @@ class MainWindow(QMainWindow):
                         self.class_combo.setCurrentIndex(i)
                         break
 
-    # ---------------------- File ops ---------------------- #
+    # ---------------------- Undo handler (including polygon points) ---------------------- #
 
-    def open_image(self):
-        dlg = QFileDialog(self)
-        dlg.setNameFilter("Images (*.png *.jpg *.jpeg *.tif *.tiff)")
-        if dlg.exec():
-            path = dlg.selectedFiles()[0]
-            base = os.path.splitext(os.path.basename(path))[0]
-            if base.endswith("_original"):
-                base = base[:-9]
-            self.current_base_name = base
+    def handle_undo(self):
+        # If currently drawing a polygon, undo removes the last point
+        if self.canvas.current_tool == "polygon" and self.canvas.current_polygon:
+            self.canvas.current_polygon.pop()
+            self.canvas.update()
+        else:
+            self.canvas.undo()
 
-            # Do not change self.base_dir; keep program path
-            self.canvas.load_image(path)
-            self.setWindowTitle(f"Dental Mask Labeler – {base}")
+    # ---------------------- Folder + image navigation ---------------------- #
 
+    def open_folder(self):
+        folder = QFileDialog.getExistingDirectory(self, "Select image folder")
+        if not folder:
+            return
 
-    # def save_all(self):
-    #     if self.canvas.image is None or self.current_base_name is None:
-    #         QMessageBox.warning(self, "Nothing to save", "Load an image first.")
-    #         return
-    #
-    #     base = self.current_base_name
-    #
-    #     images_dir = os.path.join(self.base_dir, "images_512")
-    #     masks_dir = os.path.join(self.base_dir, "masks_512_cleaned")
-    #     json_dir = os.path.join(self.base_dir, "labeled_data")
-    #     os.makedirs(images_dir, exist_ok=True)
-    #     os.makedirs(masks_dir, exist_ok=True)
-    #     os.makedirs(json_dir, exist_ok=True)
-    #
-    #     # 1) original image 512x512
-    #     img_filename = f"{base}_original.png"
-    #     img_path = os.path.join(images_dir, img_filename)
-    #     QPixmap.fromImage(self.canvas.image).save(img_path, "PNG")
-    #
-    #     # 2) true label mask (0–5, uint8, grayscale)
-    #     mask_uint8 = self.canvas.get_mask_uint8()
-    #     mask_img = Image.fromarray(mask_uint8, mode="L")
-    #     mask_filename = f"{base}_mask.png"
-    #     mask_path = os.path.join(masks_dir, mask_filename)
-    #     mask_img.save(mask_path)
-    #
-    #     # 3) colored preview mask (RGB)
-    #     preview_rgb = self.canvas.get_colored_mask()
-    #     preview_img = Image.fromarray(preview_rgb, mode="RGB")
-    #     preview_filename = f"{base}_mask_preview.png"
-    #     preview_path = os.path.join(masks_dir, preview_filename)
-    #     preview_img.save(preview_path)
-    #
-    #     # 4) JSON metadata
-    #     json_data = self.canvas.get_json(img_filename)
-    #     json_filename = f"{base}.json"
-    #     json_path = os.path.join(json_dir, json_filename)
-    #     with open(json_path, "w") as f:
-    #         json.dump(json_data, f, indent=2)
-    #
-    #     QMessageBox.information(
-    #         self,
-    #         "Saved",
-    #         f"Saved:\n{img_path}\n{mask_path}\n{preview_path}\n{json_path}",
-    #     )
+        exts = (".png", ".jpg", ".jpeg", ".tif", ".tiff")
+        files = [f for f in os.listdir(folder)
+                 if f.lower().endswith(exts)]
+        files.sort()
 
-    def save_all(self):
+        if not files:
+            QMessageBox.warning(self, "No images", "No image files found in this folder.")
+            return
+
+        self.image_folder = folder
+        self.image_files = files
+        self.current_index = 0
+
+        self.load_current_image()
+
+    def load_current_image(self):
+        if self.image_folder is None or self.current_index < 0 or self.current_index >= len(self.image_files):
+            return
+
+        filename = self.image_files[self.current_index]
+        full_path = os.path.join(self.image_folder, filename)
+
+        base = os.path.splitext(filename)[0]
+        if base.endswith("_original"):
+            base = base[:-9]
+        self.current_base_name = base
+
+        # load base image
+        self.canvas.load_image(full_path)
+
+        # try to load existing mask / polygons from previous session (autosave)
+        images_dir = os.path.join(self.base_dir, "images_512")
+        masks_dir = os.path.join(self.base_dir, "masks_512_cleaned")
+        json_dir = os.path.join(self.base_dir, "labeled_data")
+
+        mask = None
+        polygons = None
+
+        mask_path = os.path.join(masks_dir, f"{base}_mask.png")
+        if os.path.exists(mask_path):
+            try:
+                m = np.array(Image.open(mask_path))
+                if m.ndim == 2:
+                    mask = m.astype(np.uint8)
+            except Exception:
+                mask = None
+
+        json_path = os.path.join(json_dir, f"{base}.json")
+        if os.path.exists(json_path):
+            try:
+                with open(json_path, "r") as f:
+                    data = json.load(f)
+                polygons = data.get("polygons", [])
+            except Exception:
+                polygons = None
+
+        self.canvas.set_mask_and_polygons(mask, polygons)
+
+        self.setWindowTitle(
+            f"Dental Mask Labeler – {base} ({self.current_index + 1}/{len(self.image_files)})"
+        )
+
+    def autosave_current(self):
+        if self.canvas.image is not None and self.current_base_name is not None:
+            self.save_all(show_message=False)
+
+    def next_image(self):
+        if not self.image_files:
+            return
+        # autosave current before moving
+        self.autosave_current()
+        if self.current_index < len(self.image_files) - 1:
+            self.current_index += 1
+            self.load_current_image()
+        else:
+            QMessageBox.information(self, "End", "This is the last image.")
+
+    def prev_image(self):
+        if not self.image_files:
+            return
+        # autosave current before moving
+        self.autosave_current()
+        if self.current_index > 0:
+            self.current_index -= 1
+            self.load_current_image()
+        else:
+            QMessageBox.information(self, "Start", "This is the first image.")
+
+    # ---------------------- Saving (with overwrite & optional popup) ---------------------- #
+
+    def save_all(self, show_message: bool = True):
         if self.canvas.image is None or self.current_base_name is None:
-            QMessageBox.warning(self, "Nothing to save", "Load an image first.")
+            if show_message:
+                QMessageBox.warning(self, "Nothing to save", "Load an image first.")
             return
 
         base = self.current_base_name
@@ -612,18 +706,22 @@ class MainWindow(QMainWindow):
         images_dir = os.path.join(self.base_dir, "images_512")
         masks_dir = os.path.join(self.base_dir, "masks_512_cleaned")
         json_dir = os.path.join(self.base_dir, "labeled_data")
-        layers_dir = os.path.join(self.base_dir, "layers_512")  # new directory for per-class layers
+        layers_dir = os.path.join(self.base_dir, "layers_512")  # per-class layers
         os.makedirs(images_dir, exist_ok=True)
         os.makedirs(masks_dir, exist_ok=True)
         os.makedirs(json_dir, exist_ok=True)
         os.makedirs(layers_dir, exist_ok=True)
 
-        # 1) original image 512x512
+        # 1) original image 512x512 (saved as grayscale)
         img_filename = f"{base}_original.png"
         img_path = os.path.join(images_dir, img_filename)
-        QPixmap.fromImage(self.canvas.image).save(img_path, "PNG")
 
-        # 2) true label mask (0–5, uint8, grayscale)
+        gray_np = np.array(self.canvas.gray_img, dtype=np.uint8)
+        gray_img = Image.fromarray(gray_np, mode="L")
+        gray_img.save(img_path)
+
+
+# 2) true label mask (0–5, uint8, grayscale)
         mask_uint8 = self.canvas.get_mask_uint8()
         mask_img = Image.fromarray(mask_uint8, mode="L")
         mask_filename = f"{base}_mask.png"
@@ -654,11 +752,13 @@ class MainWindow(QMainWindow):
             Image.fromarray(layer, mode="L").save(layer_path)
             saved_layer_paths.append(layer_path)
 
-        QMessageBox.information(
-            self,
-            "Saved",
-            f"Saved:\n{img_path}\n{mask_path}\n{preview_path}\n{json_path}\n" + "\n".join(saved_layer_paths),
-            )
+        if show_message:
+            QMessageBox.information(
+                self,
+                "Saved",
+                f"Saved:\n{img_path}\n{mask_path}\n{preview_path}\n{json_path}\n" +
+                "\n".join(saved_layer_paths),
+                )
 
 
 # ---------------------- Main entry ---------------------- #
