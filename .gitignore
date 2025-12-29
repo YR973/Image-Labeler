@@ -1,0 +1,74 @@
+# ------------------------------
+# Python cache + bytecode files
+# ------------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual environments
+venv/
+env/
+.venv/
+ENV/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# ------------------------------
+# IDE / Editor files
+# ------------------------------
+.idea/
+.vscode/
+*.iml
+
+# ------------------------------
+# Build tools (PyInstaller, cx_Freeze, Nuitka)
+# ------------------------------
+build/
+dist/
+*.spec
+
+# Temporary logs & debugging output
+*.log
+
+# ------------------------------
+# OS-specific clutter
+# ------------------------------
+.DS_Store
+Thumbs.db
+
+# ------------------------------
+# Application-generated data
+# ------------------------------
+images_512/
+masks_512_cleaned/
+layers_512/
+labeled_data/
+autosave/
+previews/
+temp/
+
+# If you want these folders tracked, remove them from here.
+# Right now they are ignored so your repository only stores code.
+
+# ------------------------------
+# Training, ML, and dataset files
+# ------------------------------
+datasets/
+dataset/
+*.h5
+*.pth
+*.pkl
+*.npz
+*.npy
+wandb/
+mlruns/
+
+# ------------------------------
+# Local config / secrets
+# ------------------------------
+config.json
+*.env
+.env

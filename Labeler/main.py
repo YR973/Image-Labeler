@@ -19,6 +19,8 @@ from PySide6.QtWidgets import (
 
 # ---------------------- Label configuration ---------------------- #
 
+# ---------------------- Label configuration ---------------------- #
+
 @dataclass
 class ClassLabel:
     id: int
@@ -27,15 +29,31 @@ class ClassLabel:
 
 
 CLASS_MAP = {
-    0: ClassLabel(0, "background", QColor(0, 0, 0, 0)),
-    1: ClassLabel(1, "tooth", QColor(255, 0, 0, 120)),
-    2: ClassLabel(2, "canal", QColor(0, 255, 0, 120)),
-    3: ClassLabel(3, "caries", QColor(0, 0, 255, 120)),
-    4: ClassLabel(4, "periapical lesion", QColor(255, 255, 0, 120)),
-    5: ClassLabel(5, "gutta-percha", QColor(255, 0, 255, 120)),
+    0:  ClassLabel(0,  "background",               QColor(0,   0,   0,   0)),
+
+    1:  ClassLabel(1,  "tooth",                    QColor(255, 0,   0,   120)),
+    2:  ClassLabel(2,  "canal",                    QColor(0,   255, 0,   120)),
+    3:  ClassLabel(3,  "caries",                   QColor(0,   0,   255, 120)),
+    4:  ClassLabel(4,  "periapical lesion",        QColor(255, 255, 0,   120)),
+    5:  ClassLabel(5,  "gutta-percha",             QColor(255, 0,   255, 120)),
+
+    6:  ClassLabel(6,  "lamina dura change",       QColor(0,   255, 255, 120)),
+    7:  ClassLabel(7,  "crown",                    QColor(180, 180, 180, 120)),
+    8:  ClassLabel(8,  "filling",                  QColor(128, 0,   128, 120)),
+    9:  ClassLabel(9,  "secondary caries",         QColor(255, 128, 0,   120)),
+    10: ClassLabel(10, "impacted tooth",           QColor(128, 64,  0,   120)),
+    11: ClassLabel(11, "fracture",                 QColor(255, 0,   128, 120)),
+    12: ClassLabel(12, "mental foramen",           QColor(0,   128, 255, 120)),
+    13: ClassLabel(13, "sinus",                    QColor(0,   100, 0,   120)),
+    14: ClassLabel(14, "inferior alveolar nerve",  QColor(255, 215, 0,   120)),
+    15: ClassLabel(15, "recession",                QColor(139, 69,  19,  120)),
+    16: ClassLabel(16, "fiber post",               QColor(75,  0,   130, 120)),
+    17: ClassLabel(17, "metal post",               QColor(192, 192, 192, 120)),
+    18: ClassLabel(18, "open margin",              QColor(255, 20,  147, 120)),
 }
 
-VALID_IDS = {0, 1, 2, 3, 4, 5}
+VALID_IDS = set(CLASS_MAP.keys())
+
 
 
 # ---------------------- Canvas widget ---------------------- #
@@ -435,19 +453,17 @@ class LabelCanvas(QWidget):
         h, w = self.mask.shape
         rgb = np.zeros((h, w, 3), dtype=np.uint8)
 
-        color_map = {
-            0: (0, 0, 0),
-            1: (255, 0, 0),
-            2: (0, 255, 0),
-            3: (0, 0, 255),
-            4: (255, 255, 0),
-            5: (255, 0, 255),
-        }
-
-        for cid, col in color_map.items():
-            rgb[self.mask == cid] = col
+        for cid, label in CLASS_MAP.items():
+            if cid == 0:
+                continue
+            rgb[self.mask == cid] = (
+                label.color.red(),
+                label.color.green(),
+                label.color.blue(),
+            )
 
         return rgb
+
 
 
 # ---------------------- Main window ---------------------- #
