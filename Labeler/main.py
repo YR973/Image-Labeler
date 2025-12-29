@@ -29,27 +29,29 @@ class ClassLabel:
 
 
 CLASS_MAP = {
+
     0:  ClassLabel(0,  "background",               QColor(0,   0,   0,   0)),
+    1:  ClassLabel(1,  "tooth",                    QColor(220, 20,  60,  120)),  # crimson
+    2:  ClassLabel(2,  "canal",                    QColor(0,   180, 0,   120)),  # green
+    3:  ClassLabel(3,  "caries",                   QColor(30,  144, 255, 120)),  # blue
+    4:  ClassLabel(4,  "periapical lesion",        QColor(255, 215, 0,   120)),  # gold
+    5:  ClassLabel(5,  "gutta-percha",             QColor(138, 43,  226, 120)),  # violet
+    6:  ClassLabel(6,  "lamina dura change",       QColor(0,   206, 209, 120)),  # turquoise
+    7:  ClassLabel(7,  "crown",                    QColor(245, 245, 245, 120)),  # off-white
+    8:  ClassLabel(8,  "filling",                  QColor(255, 140, 0,   120)),  # orange
+    9:  ClassLabel(9,  "secondary caries",         QColor(199, 21,  133, 120)),  # magenta-red
+    10: ClassLabel(10, "impacted",                 QColor(85,  107, 47,  120)),  # olive
+    11: ClassLabel(11, "fracture",                 QColor(0,   0,   0,   200)),  # black (edge contrast)
+    12: ClassLabel(12, "mental foramen",           QColor(0,   191, 255, 120)),  # sky blue
+    13: ClassLabel(13, "sinus",                    QColor(64,  224, 208, 120)),  # aqua
+    14: ClassLabel(14, "inferior alveolar nerve",  QColor(255, 0,   255, 120)),  # pure magenta
+    15: ClassLabel(15, "recession",                QColor(160, 82,  45,  120)),  # brown
+    16: ClassLabel(16, "fiber post",               QColor(72,  61,  139, 120)),  # slate blue
+    17: ClassLabel(17, "metal post",               QColor(192, 192, 192, 120)),  # silver
+    18: ClassLabel(18, "open margin",              QColor(255, 20,  147, 120)),  # deep pink
+    19: ClassLabel(19, "broken file",              QColor(0,   255, 255, 180)),  # NEON CYAN (warning)
 
-    1:  ClassLabel(1,  "tooth",                    QColor(255, 0,   0,   120)),
-    2:  ClassLabel(2,  "canal",                    QColor(0,   255, 0,   120)),
-    3:  ClassLabel(3,  "caries",                   QColor(0,   0,   255, 120)),
-    4:  ClassLabel(4,  "periapical lesion",        QColor(255, 255, 0,   120)),
-    5:  ClassLabel(5,  "gutta-percha",             QColor(255, 0,   255, 120)),
 
-    6:  ClassLabel(6,  "lamina dura change",       QColor(0,   255, 255, 120)),
-    7:  ClassLabel(7,  "crown",                    QColor(180, 180, 180, 120)),
-    8:  ClassLabel(8,  "filling",                  QColor(128, 0,   128, 120)),
-    9:  ClassLabel(9,  "secondary caries",         QColor(255, 128, 0,   120)),
-    10: ClassLabel(10, "impacted tooth",           QColor(128, 64,  0,   120)),
-    11: ClassLabel(11, "fracture",                 QColor(255, 0,   128, 120)),
-    12: ClassLabel(12, "mental foramen",           QColor(0,   128, 255, 120)),
-    13: ClassLabel(13, "sinus",                    QColor(0,   100, 0,   120)),
-    14: ClassLabel(14, "inferior alveolar nerve",  QColor(255, 215, 0,   120)),
-    15: ClassLabel(15, "recession",                QColor(139, 69,  19,  120)),
-    16: ClassLabel(16, "fiber post",               QColor(75,  0,   130, 120)),
-    17: ClassLabel(17, "metal post",               QColor(192, 192, 192, 120)),
-    18: ClassLabel(18, "open margin",              QColor(255, 20,  147, 120)),
 }
 
 VALID_IDS = set(CLASS_MAP.keys())
